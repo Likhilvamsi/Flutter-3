@@ -303,7 +303,7 @@ class _ShopDetailsPageState extends State<ShopDetailsPage> {
                                 color: Colors.white, size: 35),
                             const SizedBox(height: 8),
                             Text(
-                              barber['name'] ?? 'Unnamed',
+                              barber['barber_name'] ?? 'Unnamed',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: Colors.white,
