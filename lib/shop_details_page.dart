@@ -196,7 +196,7 @@ class _ShopDetailsPageState extends State<ShopDetailsPage> {
                           "is_available": isAvailable,
                           "everyday": everyday,
                         },
-                        ownerId: Widget.ownerId,
+                        ownerId: widget.ownerId,
                       );
                       Navigator.pop(context);
                       fetchBarbers();
