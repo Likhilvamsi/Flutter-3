@@ -6,11 +6,12 @@ import 'package:intl/intl.dart';
 class ShopDetailsPage extends StatefulWidget {
   final int shopId;
   final String shopName;
-
+ final int ownerId;
   const ShopDetailsPage({
     super.key,
     required this.shopId,
     required this.shopName,
+    required this.ownerId
   });
 
   @override

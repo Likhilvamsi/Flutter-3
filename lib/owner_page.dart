@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'add_shop_page.dart';
 import 'shop_details_page.dart';
-import 'login_page.dart'; // 👈 make sure this import points to your login screen
+import 'login_page.dart'; // 👈 Make sure this points to your login screen
 
 class OwnerPage extends StatefulWidget {
   final int ownerId;
@@ -24,6 +24,7 @@ class _OwnerPageState extends State<OwnerPage> {
     fetchShops();
   }
 
+  // 🔹 Fetch all shops owned by this owner
   Future<void> fetchShops() async {
     try {
       final data = await api.getShopsByOwner(widget.ownerId);
@@ -37,6 +38,7 @@ class _OwnerPageState extends State<OwnerPage> {
     }
   }
 
+  // 🔹 Navigate to Add Shop page
   Future<void> _navigateToAddShop() async {
     final result = await Navigator.push(
       context,
@@ -47,11 +49,16 @@ class _OwnerPageState extends State<OwnerPage> {
     }
   }
 
-  void _navigateToShopDetails(int shopId, String shopName) {
+  // 🔹 Navigate to Shop Details page
+  void _navigateToShopDetails(int shopId, String shopName, {required int ownerId}) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ShopDetailsPage(shopId: shopId, shopName: shopName),
+        builder: (_) => ShopDetailsPage(
+          shopId: shopId,
+          shopName: shopName,
+          ownerId: ownerId,
+        ),
       ),
     );
   }
@@ -63,7 +70,7 @@ class _OwnerPageState extends State<OwnerPage> {
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const LoginPage()), // 👈 your login page
+      MaterialPageRoute(builder: (_) => const LoginPage()), // 👈 Redirect to login
       (route) => false,
     );
   }
@@ -101,8 +108,7 @@ class _OwnerPageState extends State<OwnerPage> {
               icon: const Icon(Icons.add_business_rounded, color: Colors.white),
               label: const Text(
                 "Add Shop",
-                style:
-                    TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
               ),
               onPressed: _navigateToAddShop,
             ),
@@ -128,8 +134,7 @@ class _OwnerPageState extends State<OwnerPage> {
                   padding: const EdgeInsets.all(12.0),
                   child: GridView.builder(
                     itemCount: shops.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 4,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
@@ -141,6 +146,7 @@ class _OwnerPageState extends State<OwnerPage> {
                         onTap: () => _navigateToShopDetails(
                           shop['shop_id'] ?? 0,
                           shop['shop_name'] ?? '',
+                          ownerId: widget.ownerId, // ✅ Correct usage
                         ),
                         borderRadius: BorderRadius.circular(16),
                         child: AnimatedContainer(
