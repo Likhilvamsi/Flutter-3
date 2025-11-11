@@ -1,4 +1,4 @@
-name: Build and Deploy Flutter Web App to Azure
+name: Build and Deploy Flutter Frontend to AKS
 
 on:
   push:
@@ -6,44 +6,71 @@ on:
       - main
 
 env:
+  REGISTRY_NAME: deploy01
   IMAGE_NAME: flutter-frontend
+  CLUSTER_NAME: Devopscluster
+  RESOURCE_GROUP: ACK
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code
-      - name: Checkout Code
+      # Step 1: Checkout source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Login to Azure
+      # Step 2: Setup Flutter
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.24.0"
+
+      # Step 3: Get dependencies and build release web version
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Flutter web
+        run: flutter build web --release
+
+      # Step 4: Login to Azure
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Step 3: Build and Push Docker Image to ACR
-      - name: Build and Push Image to ACR
+      # Step 5: Login to Azure Container Registry
+      - name: Azure ACR Login
         run: |
-          az acr login --name ${{ secrets.ACR_NAME }}
-          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          az acr login --name ${{ env.REGISTRY_NAME }}
 
-      # Step 4: Set AKS context
-      - name: Set AKS Context
-        uses: azure/aks-set-context@v3
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
-          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+      # Step 6: Build and push Docker image to ACR
+      - name: Build and Push Docker Image to ACR
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:$IMAGE_TAG .
+          docker push ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:$IMAGE_TAG
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-      # Step 5: Deploy to AKS
+      # Step 7: Get AKS credentials
+      - name: Get AKS Credentials
+        run: |
+          az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.CLUSTER_NAME }} --overwrite-existing
+
+      # Step 8: Update Kubernetes manifests
+      - name: Set image tag in Kubernetes manifests
+        run: |
+          sed -i "s|image: .*|image: ${{ env.REGISTRY_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" k8s/deployment.yaml
+
+      # Step 9: Deploy to AKS
       - name: Deploy to AKS
-        uses: azure/k8s-deploy@v4
-        with:
-          manifests: |
-            k8s/deployment.yaml
-            k8s/service.yaml
-          images: |
-            ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+      # Step 10: Verify deployment
+      - name: Verify Frontend Deployment
+        run: |
+          kubectl get pods -o wide
+          kubectl get svc flutter-frontend-service
