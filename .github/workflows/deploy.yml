@@ -1,11 +1,15 @@
-name: Build and Deploy Flutter Frontend
+name: Build and Deploy Flutter Web App to Azure
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
+
+env:
+  IMAGE_NAME: flutter-frontend
 
 jobs:
-  build-deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -13,53 +17,33 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Setup Flutter environment
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      # Step 2: Login to Azure
+      - name: Azure Login
+        uses: azure/login@v2
         with:
-          flutter-version: "3.35.7"   # Use stable channel; 3.35.7 is not yet official
-          channel: "stable"
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Step 3: Install dependencies
-      - name: Install Dependencies
-        run: flutter pub get
+      # Step 3: Build and Push Docker Image to ACR
+      - name: Build and Push Image to ACR
+        run: |
+          az acr login --name ${{ secrets.ACR_NAME }}
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-      # Step 4: Build Flutter for web (optimized)
-      - name: Build Flutter Web
-        run: flutter build web --release
-
-      # Step 5: Clean old files on VM before deploying
-      - name: Clean Remote Frontend Folder
-        uses: appleboy/ssh-action@v0.1.10
+      # Step 4: Set AKS context
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            echo "🧹 Cleaning old frontend files..."
-            sudo rm -rf ~/app/frontend/*
-            sudo mkdir -p ~/app/frontend/
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
 
-      # Step 6: Deploy build files to VM
-      - name: Deploy to VM via SCP
-        uses: appleboy/scp-action@v0.1.7
+      # Step 5: Deploy to AKS
+      - name: Deploy to AKS
+        uses: azure/k8s-deploy@v4
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "build/web/*"
-          target: "~/app/frontend/"
-          overwrite: true
-          rm: true
-
-      # Step 7: Restart Nginx (frontend served from /home/azureuser/app/frontend/build/web)
-      - name: Restart Nginx
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            echo "🔄 Restarting Nginx to serve new build..."
-            sudo nginx -t && sudo systemctl reload nginx
-            echo "✅ Frontend deployed successfully!"
+          manifests: |
+            k8s/deployment.yaml
+            k8s/service.yaml
+          images: |
+            ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
